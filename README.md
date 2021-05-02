@@ -8,8 +8,8 @@ Self-supervised learning (SSL) allows to learn useful representations from unlab
 ### Instructions
 Clone repo and install it
 ```bash
-git clone https://github.com/mohammedshariqnawaz/DefRec.git
-cd DefRec
+git clone https://github.com/mohammedshariqnawaz/DefRec_3D.git
+cd DefRec_3D
 pip install -e .
 ```
 
