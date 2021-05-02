@@ -1,4 +1,4 @@
-# Self-Supervised Learning for Domain Adaptation on Point-Clouds
+# DefRec
 
 <p align="center"> 
     <img src="./resources/arch.png" width="400">
@@ -12,17 +12,17 @@ Self-supervised learning (SSL) allows to learn useful representations from unlab
 ### Instructions
 Clone repo and install it
 ```bash
-git clone https://github.com/IdanAchituve/DefRec_and_PCM.git
-cd DefRec_and_PCM
+git clone https://github.com/mohammedshariqnawaz/DefRec.git
+cd DefRec
 pip install -e .
 ```
 
 Download data:
 ```bash
-cd ./xxx/data
+cd ./PointDA/data
 python download.py
 ```
-Where xxx is the dataset (either PointDA or PointSegDA)
+
 
 
 ### Citation
@@ -36,16 +36,7 @@ Please cite this paper if you want to use it in your work,
   year={2021}
 }
 ```
- ### PointSegDA dataset
-<p align="center"> 
-    <img src="./resources/PointSegDA.png">
-</p>
 
-### Shape Reconstruction
-<p align="center"> 
-    <img src="./resources/reconstruction.png">
-</p> 
- 
  
 ### Acknowledgement
 Some of the code in this repoistory was taken (and modified according to needs) from the follwing sources:
