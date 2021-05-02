@@ -22,7 +22,7 @@ def requirements():
 
 
 setup(
-      name='DefRec_and_PCM',
+      # name='DefRec_and_PCM',
       version='1.0.0',  # Required
       description='DefRec and PCM code',  # Optional
       long_description='',  # Optional
@@ -30,7 +30,7 @@ setup(
       url='',  # Optional
       author='',  # Optional
       author_email='',  # Optional
-      packages=['DefRec_and_PCM'],
+      packages=['DefRec'],
       python_requires='>=3.5',
       install_requires=requirements()  # Optional
 )
