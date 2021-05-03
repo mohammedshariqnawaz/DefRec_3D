@@ -13,7 +13,7 @@ import utils.log
 from PointDA.data.dataloader import ScanNet, ModelNet, ShapeNet, label_to_idx
 from PointDA.Models import PointNet, DGCNN
 from utils import pc_utils
-from DefRec import DefRec, PCM
+from DefRec import DefRec
 
 NWORKERS=4
 MAX_LOSS = 9 * (10**9)
@@ -38,11 +38,11 @@ def str2bool(v):
 # Argparse
 # ==================
 parser = argparse.ArgumentParser(description='DA on Point Clouds')
-parser.add_argument('--exp_name', type=str, default='DefRec_PCM',  help='Name of the experiment')
+parser.add_argument('--exp_name', type=str, default='DefRec',  help='Name of the experiment')
 parser.add_argument('--out_path', type=str, default='./experiments', help='log folder path')
 parser.add_argument('--dataroot', type=str, default='./data', metavar='N', help='data path')
 parser.add_argument('--src_dataset', type=str, default='shapenet', choices=['modelnet', 'shapenet', 'scannet'])
-parser.add_argument('--trgt_dataset', type=str, default='shapenet', choices=['modelnet', 'shapenet', 'scannet'])
+parser.add_argument('--trgt_dataset', type=str, default='None', choices=['modelnet', 'shapenet', 'scannet'])
 parser.add_argument('--epochs', type=int, default=150, help='number of episode to train')
 parser.add_argument('--model', type=str, default='dgcnn', choices=['pointnet', 'dgcnn'], help='Model to use')
 parser.add_argument('--seed', type=int, default=1, help='random seed (default: 1)')
@@ -103,10 +103,10 @@ def split_set(dataset, domain, set_type="source"):
     train_indices = dataset.train_ind
     val_indices = dataset.val_ind
     unique, counts = np.unique(dataset.label[train_indices], return_counts=True)
-    io.cprint("Occurrences count of classes in " + set_type + " " + domain +
+    io.cprint("Occurrences count of classes in source dataset " + set_type + " " + domain +
               " train part: " + str(dict(zip(unique, counts))))
     unique, counts = np.unique(dataset.label[val_indices], return_counts=True)
-    io.cprint("Occurrences count of classes in " + set_type + " " + domain +
+    io.cprint("Occurrences count of classes in target dataset " + set_type + " " + domain +
               " validation part: " + str(dict(zip(unique, counts))))
     # Creating PT data samplers and loaders:
     train_sampler = SubsetRandomSampler(train_indices)
@@ -114,27 +114,27 @@ def split_set(dataset, domain, set_type="source"):
     return train_sampler, valid_sampler
 
 src_dataset = args.src_dataset
-trgt_dataset = args.trgt_dataset
+# trgt_dataset = args.trgt_dataset
 data_func = {'modelnet': ModelNet, 'scannet': ScanNet, 'shapenet': ShapeNet}
 
 src_trainset = data_func[src_dataset](io, args.dataroot, 'train')
-trgt_trainset = data_func[trgt_dataset](io, args.dataroot, 'train')
-trgt_testset = data_func[trgt_dataset](io, args.dataroot, 'test')
+# trgt_trainset = data_func[trgt_dataset](io, args.dataroot, 'train')
+src_testset = data_func[src_dataset](io, args.dataroot, 'test')
 
 # Creating data indices for training and validation splits:
 src_train_sampler, src_valid_sampler = split_set(src_trainset, src_dataset, "source")
-trgt_train_sampler, trgt_valid_sampler = split_set(trgt_trainset, trgt_dataset, "target")
+# trgt_train_sampler, trgt_valid_sampler = split_set(trgt_trainset, trgt_dataset, "target")
 
 # dataloaders for source and target
 src_train_loader = DataLoader(src_trainset, num_workers=NWORKERS, batch_size=args.batch_size,
                                sampler=src_train_sampler, drop_last=True)
 src_val_loader = DataLoader(src_trainset, num_workers=NWORKERS, batch_size=args.test_batch_size,
                              sampler=src_valid_sampler)
-trgt_train_loader = DataLoader(trgt_trainset, num_workers=NWORKERS, batch_size=args.batch_size,
-                                sampler=trgt_train_sampler, drop_last=True)
-trgt_val_loader = DataLoader(trgt_trainset, num_workers=NWORKERS, batch_size=args.test_batch_size,
-                                  sampler=trgt_valid_sampler)
-trgt_test_loader = DataLoader(trgt_testset, num_workers=NWORKERS, batch_size=args.test_batch_size)
+# trgt_train_loader = DataLoader(trgt_trainset, num_workers=NWORKERS, batch_size=args.batch_size,
+#                                 sampler=trgt_train_sampler, drop_last=True)
+# trgt_val_loader = DataLoader(trgt_trainset, num_workers=NWORKERS, batch_size=args.test_batch_size,
+#                                   sampler=trgt_valid_sampler)
+src_test_loader = DataLoader(src_testset, num_workers=NWORKERS, batch_size=args.test_batch_size)
 
 # ==================
 # Init Model
@@ -167,7 +167,7 @@ lookup = torch.Tensor(pc_utils.region_mean(args.num_regions)).to(device)
 # ==================
 # Validation/test
 # ==================
-def test(test_loader, model=None, set_type="Target", partition="Val", epoch=0):
+def test(test_loader, model=None, set_type="Source", partition="Val", epoch=0):
 
     # Run on cpu or gpu
     count = 0.0
@@ -206,8 +206,10 @@ def test(test_loader, model=None, set_type="Target", partition="Val", epoch=0):
 # ==================
 # Train
 # ==================
-src_best_val_acc = trgt_best_val_acc = best_val_epoch = 0
-src_best_val_loss = trgt_best_val_loss = MAX_LOSS
+# src_best_val_acc = trgt_best_val_acc = best_val_epoch = 0
+# src_best_val_loss = trgt_best_val_loss = MAX_LOSS
+src_best_val_acc  = best_val_epoch = 0
+src_best_val_loss  = MAX_LOSS
 best_model = io.save_model(model)
 
 for epoch in range(args.epochs):
@@ -219,11 +221,13 @@ for epoch in range(args.epochs):
     src_print_losses = {"total": 0.0, cls_type: 0.0}
     if args.DefRec_on_src:
         src_print_losses['DefRec'] = 0.0
-    trgt_print_losses = {'DefRec': 0.0}
-    src_count = trgt_count = 0.0
+    # trgt_print_losses = {'DefRec': 0.0}
+    # src_count = trgt_count = 0.0
+    src_count = 0.0
+
 
     batch_idx = 1
-    for data1, data2 in zip(src_train_loader, trgt_train_loader):
+    for data1 in src_train_loader:
         opt.zero_grad()
 
         #### source data ####
@@ -252,31 +256,31 @@ for epoch in range(args.epochs):
             #     src_print_losses['total'] += loss.item() * batch_size
             #     loss.backward()
 
-            else:
-                src_data = src_data_orig.clone()
-                # predict with undistorted shape
-                src_cls_logits = model(src_data, activate_DefRec=False)
-                loss = (1 - args.DefRec_weight) * criterion(src_cls_logits["cls"], src_label)
-                src_print_losses['cls'] += loss.item() * batch_size
-                src_print_losses['total'] += loss.item() * batch_size
-                loss.backward()
+            # else:
+            #     src_data = src_data_orig.clone()
+            #     # predict with undistorted shape
+            #     src_cls_logits = model(src_data, activate_DefRec=False)
+            #     loss = (1 - args.DefRec_weight) * criterion(src_cls_logits["cls"], src_label)
+            #     src_print_losses['cls'] += loss.item() * batch_size
+            #     src_print_losses['total'] += loss.item() * batch_size
+            #     loss.backward()
 
             src_count += batch_size
 
         #### target data ####
-        if data2 is not None:
-            trgt_data, trgt_label = data2[0].to(device), data2[1].to(device).squeeze()
-            trgt_data = trgt_data.permute(0, 2, 1)
-            batch_size = trgt_data.size()[0]
-            trgt_data_orig = trgt_data.clone()
-            device = torch.device("cuda:" + str(trgt_data.get_device()) if args.cuda else "cpu")
+        # if data2 is not None:
+        #     trgt_data, trgt_label = data2[0].to(device), data2[1].to(device).squeeze()
+        #     trgt_data = trgt_data.permute(0, 2, 1)
+        #     batch_size = trgt_data.size()[0]
+        #     trgt_data_orig = trgt_data.clone()
+        #     device = torch.device("cuda:" + str(trgt_data.get_device()) if args.cuda else "cpu")
 
-            trgt_data, trgt_mask = DefRec.deform_input(trgt_data, lookup, args.DefRec_dist, device)
-            trgt_logits = model(trgt_data, activate_DefRec=True)
-            loss = DefRec.calc_loss(args, trgt_logits, trgt_data_orig, trgt_mask)
-            trgt_print_losses['DefRec'] += loss.item() * batch_size
-            loss.backward()
-            trgt_count += batch_size
+        #     trgt_data, trgt_mask = DefRec.deform_input(trgt_data, lookup, args.DefRec_dist, device)
+        #     trgt_logits = model(trgt_data, activate_DefRec=True)
+        #     loss = DefRec.calc_loss(args, trgt_logits, trgt_data_orig, trgt_mask)
+        #     trgt_print_losses['DefRec'] += loss.item() * batch_size
+        #     loss.backward()
+        #     trgt_count += batch_size
 
         opt.step()
         batch_idx += 1
@@ -286,36 +290,39 @@ for epoch in range(args.epochs):
     # print progress
     src_print_losses = {k: v * 1.0 / src_count for (k, v) in src_print_losses.items()}
     src_acc = io.print_progress("Source", "Trn", epoch, src_print_losses)
-    trgt_print_losses = {k: v * 1.0 / trgt_count for (k, v) in trgt_print_losses.items()}
-    trgt_acc = io.print_progress("Target", "Trn", epoch, trgt_print_losses)
+    # trgt_print_losses = {k: v * 1.0 / trgt_count for (k, v) in trgt_print_losses.items()}
+    # trgt_acc = io.print_progress("Target", "Trn", epoch, trgt_print_losses)
 
     #===================
     # Validation
     #===================
     src_val_acc, src_val_loss, src_conf_mat = test(src_val_loader, model, "Source", "Val", epoch)
-    trgt_val_acc, trgt_val_loss, trgt_conf_mat = test(trgt_val_loader, model, "Target", "Val", epoch)
+    # trgt_val_acc, trgt_val_loss, trgt_conf_mat = test(trgt_val_loader, model, "Target", "Val", epoch)
 
     # save model according to best source model (since we don't have target labels)
     if src_val_acc > src_best_val_acc:
         src_best_val_acc = src_val_acc
         src_best_val_loss = src_val_loss
-        trgt_best_val_acc = trgt_val_acc
-        trgt_best_val_loss = trgt_val_loss
+        # trgt_best_val_acc = trgt_val_acc
+        # trgt_best_val_loss = trgt_val_loss
         best_val_epoch = epoch
-        best_epoch_conf_mat = trgt_conf_mat
+        # best_epoch_conf_mat = trgt_conf_mat
         best_model = io.save_model(model)
 
+# io.cprint("Best model was found at epoch %d, source validation accuracy: %.4f, source validation loss: %.4f,"
+#           "target validation accuracy: %.4f, target validation loss: %.4f"
+#           % (best_val_epoch, src_best_val_acc, src_best_val_loss, trgt_best_val_acc, trgt_best_val_loss))
+
 io.cprint("Best model was found at epoch %d, source validation accuracy: %.4f, source validation loss: %.4f,"
-          "target validation accuracy: %.4f, target validation loss: %.4f"
-          % (best_val_epoch, src_best_val_acc, src_best_val_loss, trgt_best_val_acc, trgt_best_val_loss))
-io.cprint("Best validtion model confusion matrix:")
-io.cprint('\n' + str(best_epoch_conf_mat))
+          % (best_val_epoch, src_best_val_acc, src_best_val_loss))
+# io.cprint("Best validtion model confusion matrix:")
+# io.cprint('\n' + str(best_epoch_conf_mat))
 
 #===================
 # Test
 #===================
 model = best_model
-trgt_test_acc, trgt_test_loss, trgt_conf_mat = test(trgt_test_loader, model, "Target", "Test", 0)
-io.cprint("target test accuracy: %.4f, target test loss: %.4f" % (trgt_test_acc, trgt_best_val_loss))
-io.cprint("Test confusion matrix:")
-io.cprint('\n' + str(trgt_conf_mat))
+src_test_acc, src_test_loss, src_conf_mat = test(src_test_loader, model, "Source", "Test", 0)
+io.cprint("Source test accuracy: %.4f, Source test loss: %.4f" % (src_test_acc, src_best_val_loss))
+# io.cprint("Test confusion matrix:")
+# io.cprint('\n' + str(trgt_conf_mat))
